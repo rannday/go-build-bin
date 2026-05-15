@@ -8,195 +8,151 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
 	"time"
+
+	"github.com/rannday/go-build-bin/internal/atomicfile"
 )
 
-var fixedTime = time.Unix(0, 0).UTC()
+type Format string
 
 const (
-	FormatZip   = "zip"
-	FormatTarGz = "tar.gz"
+	FormatZip   Format = "zip"
+	FormatTarGz Format = "tar.gz"
 )
 
+func (f Format) String() string {
+	return string(f)
+}
+
 type Item struct {
-	Source string
-	Name   string
-	Mode   os.FileMode
+	Name string
+	Path string
 }
 
-func Create(path string, format string, items []Item) error {
-	switch format {
-	case FormatZip:
-		return createZip(path, items)
-	case FormatTarGz:
-		return createTarGz(path, items)
-	default:
-		return fmt.Errorf("unsupported archive format: %s", format)
-	}
+func WriteAtomic(path string, format Format, items []Item) error {
+	return atomicfile.Write(path, func(tmpPath string) error {
+		switch format {
+		case FormatZip:
+			return writeZip(tmpPath, items)
+		case FormatTarGz:
+			return writeTarGz(tmpPath, items)
+		default:
+			return fmt.Errorf("unsupported archive format: %s", format)
+		}
+	})
 }
 
-func createZip(path string, items []Item) (err error) {
-	items = sortedItems(items)
-
-	f, err := os.Create(path)
+func writeZip(path string, items []Item) error {
+	file, err := os.Create(path)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer file.Close()
 
-	zw := zip.NewWriter(f)
-	defer func() {
-		if closeErr := zw.Close(); err == nil {
-			err = closeErr
-		}
-	}()
-
+	zw := zip.NewWriter(file)
 	for _, item := range items {
 		if err := writeZipItem(zw, item); err != nil {
+			_ = zw.Close()
 			return err
 		}
 	}
 
-	return nil
+	return zw.Close()
 }
 
-func createTarGz(path string, items []Item) (err error) {
-	items = sortedItems(items)
-
-	f, err := os.Create(path)
+func writeZipItem(zw *zip.Writer, item Item) error {
+	info, file, err := openItem(item)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
-
-	gz, err := gzip.NewWriterLevel(f, gzip.BestCompression)
-	if err != nil {
-		return err
-	}
-	gz.Header.ModTime = fixedTime
-	gz.Header.OS = 255
-
-	tw := tar.NewWriter(gz)
-	defer func() {
-		if closeErr := tw.Close(); err == nil {
-			err = closeErr
-		}
-		if closeErr := gz.Close(); err == nil {
-			err = closeErr
-		}
-	}()
-
-	for _, item := range items {
-		if err := writeTarItem(tw, item); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func openItem(path string) (*os.File, os.FileInfo, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, nil, err
-	}
-	info, err := f.Stat()
-	if err != nil {
-		_ = f.Close()
-		return nil, nil, err
-	}
-	return f, info, nil
-}
-
-func writeZipItem(zw *zip.Writer, item Item) (err error) {
-	src, info, err := openItem(item.Source)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if closeErr := src.Close(); err == nil {
-			err = closeErr
-		}
-	}()
+	defer file.Close()
 
 	hdr, err := zip.FileInfoHeader(info)
 	if err != nil {
 		return err
 	}
-	hdr.Name = item.Name
+	hdr.Name = archiveName(item)
 	hdr.Method = zip.Deflate
-	hdr.SetMode(item.Mode)
-	hdr.SetModTime(fixedTime)
+	hdr.SetModTime(time.Unix(0, 0).UTC())
 
 	w, err := zw.CreateHeader(hdr)
 	if err != nil {
 		return err
 	}
-	if _, err := io.Copy(w, src); err != nil {
-		return err
-	}
-	return nil
+
+	_, err = io.Copy(w, file)
+	return err
 }
 
-func writeTarItem(tw *tar.Writer, item Item) (err error) {
-	src, info, err := openItem(item.Source)
+func writeTarGz(path string, items []Item) error {
+	file, err := os.Create(path)
 	if err != nil {
 		return err
 	}
-	defer func() {
-		if closeErr := src.Close(); err == nil {
-			err = closeErr
-		}
-	}()
+	defer file.Close()
 
-	hdr := &tar.Header{
-		Name:     item.Name,
-		Mode:     int64(item.Mode),
-		Size:     info.Size(),
-		ModTime:  fixedTime,
-		Typeflag: tar.TypeReg,
-		Uid:      0,
-		Gid:      0,
-		Uname:    "",
-		Gname:    "",
-		Format:   tar.FormatUSTAR,
+	gz := gzip.NewWriter(file)
+	tw := tar.NewWriter(gz)
+
+	for _, item := range items {
+		if err := writeTarItem(tw, item); err != nil {
+			_ = tw.Close()
+			_ = gz.Close()
+			return err
+		}
 	}
+
+	if err := tw.Close(); err != nil {
+		_ = gz.Close()
+		return err
+	}
+	return gz.Close()
+}
+
+func writeTarItem(tw *tar.Writer, item Item) error {
+	info, file, err := openItem(item)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	hdr, err := tar.FileInfoHeader(info, "")
+	if err != nil {
+		return err
+	}
+	hdr.Name = archiveName(item)
+	hdr.ModTime = time.Unix(0, 0).UTC()
+	hdr.AccessTime = hdr.ModTime
+	hdr.ChangeTime = hdr.ModTime
+	hdr.Uid = 0
+	hdr.Gid = 0
+	hdr.Uname = ""
+	hdr.Gname = ""
+
 	if err := tw.WriteHeader(hdr); err != nil {
 		return err
 	}
-	if _, err := io.Copy(tw, src); err != nil {
-		return err
-	}
-	return nil
+
+	_, err = io.Copy(tw, file)
+	return err
 }
 
-func sortedItems(items []Item) []Item {
-	out := append([]Item(nil), items...)
-	sort.Slice(out, func(i, j int) bool {
-		return out[i].Name < out[j].Name
-	})
-	return out
-}
-
-func WriteAtomic(path string, format string, items []Item) error {
-	dir := filepath.Dir(path)
-	tmp, err := os.CreateTemp(dir, filepath.Base(path)+".tmp-*")
+func openItem(item Item) (os.FileInfo, *os.File, error) {
+	file, err := os.Open(item.Path)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
-	tmpPath := tmp.Name()
-	_ = tmp.Close()
-	if err := os.Remove(tmpPath); err != nil && !os.IsNotExist(err) {
-		return err
+	info, err := file.Stat()
+	if err != nil {
+		_ = file.Close()
+		return nil, nil, err
 	}
-	if err := Create(tmpPath, format, items); err != nil {
-		_ = os.Remove(tmpPath)
-		return err
+	return info, file, nil
+}
+
+func archiveName(item Item) string {
+	if item.Name != "" {
+		return filepath.ToSlash(item.Name)
 	}
-	if err := os.Rename(tmpPath, path); err != nil {
-		_ = os.Remove(tmpPath)
-		return err
-	}
-	return nil
+	return filepath.Base(item.Path)
 }

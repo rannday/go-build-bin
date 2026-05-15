@@ -100,7 +100,3 @@ go tool go-build-bin -v 1.2.3 --name myapp --main ./cmd/myapp --version-var gith
 ```
 
 Use the archives and `checksums.txt` under `tmp/release/<version>` with your own release uploader.
-
-## Migration Note
-
-After pinning this tool with `go get -tool`, local `tools/go-build-bin` copies in consuming repos can be removed.
