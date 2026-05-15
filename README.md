@@ -4,6 +4,7 @@
 
 It builds deterministic release archives, writes `checksums.txt`, and targets common Windows, Linux, and macOS binaries by default.
 It streams binaries straight into archives, so archive size does not depend on RAM.
+It also prints its own tool version with `-V, --version-info`.
 
 ## Install
 
@@ -34,54 +35,7 @@ go get -tool github.com/rannday/go-build-bin/cmd/go-build-bin@v1.2.3
 go-build-bin -v VERSION [flags]
 ```
 
-Required:
-
-- `-v, --version VERSION`
-
-Project metadata:
-
-- `-n, --name NAME`
-- `-m, --main PACKAGE`
-- `--version-var SYMBOL`
-
-Output:
-
-- `-o, --out DIR`
-- `-c, --clean`
-- `-f, --force`
-- `--flat`
-- `--checksum-name NAME`
-
-Build:
-
-- `-t, --target GOOS/GOARCH`
-- `-t, --target GOOS/GOARCH:FORMAT`
-- `--ldflags VALUE`
-- `--no-strip`
-- `--go GO_BINARY`
-- `--verbose`
-
-Common short forms:
-
-- `-v`, `-n`, `-m`, `-o`, `-c`, `-f`, `-t`, `-h`
-
-Long-only flags:
-
-- `--version-var`
-- `--flat`
-- `--checksum-name`
-- `--ldflags`
-- `--no-strip`
-- `--go`
-- `--verbose`
-
-Default targets:
-
-- `windows/amd64:zip`
-- `linux/amd64:tar.gz`
-- `linux/arm64:tar.gz`
-- `darwin/amd64:tar.gz`
-- `darwin/arm64:tar.gz`
+`-h, --help` prints help. `-V, --version-info` prints tool version.
 
 Default output directory is version-scoped:
 
@@ -113,11 +67,29 @@ Generated `-ldflags` order:
 2. `-X <version-var>=<version>` when `--version-var` is set
 3. user `--ldflags` value, appended last
 
+Archive filenames:
+
+`<name>-<version>-<goos>-<goarch>.<format>`
+
 Archive notes:
 
 - Windows targets build `.exe` binaries.
 - Non-Windows targets build plain binary names.
 - Archive contents stay deterministic through fixed timestamps and sorted entries.
+- Default targets:
+  - `windows/amd64:zip`
+  - `linux/amd64:tar.gz`
+  - `linux/arm64:tar.gz`
+  - `darwin/amd64:tar.gz`
+  - `darwin/arm64:tar.gz`
+- Default checksum filename: `checksums.txt`
+- Default Go binary: `go`
+
+Tool version:
+
+- `-V, --version-info` prints `go-build-bin <version>`
+- Default source is `cmd/go-build-bin/main.go`
+- Release builds can inject version with `-ldflags -X main.version=<tag>`
 
 ## Example
 
