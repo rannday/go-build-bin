@@ -197,6 +197,10 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 		return Result{}, err
 	}
 
+	if err := ValidateUniqueArchiveNames(name, opts.Version, opts.Targets); err != nil {
+		return Result{}, err
+	}
+
 	if opts.Clean {
 		if err := os.RemoveAll(outAbs); err != nil {
 			return Result{}, fmt.Errorf("clean output dir: %w", err)
@@ -435,6 +439,18 @@ func BinaryName(name, goos string) string {
 func ArchiveName(name, version string, target TargetSpec) string {
 	ext := target.Format
 	return fmt.Sprintf("%s-%s-%s-%s.%s", name, version, target.GOOS, target.GOARCH, ext)
+}
+
+func ValidateUniqueArchiveNames(name, version string, targets []TargetSpec) error {
+	seen := make(map[string]struct{}, len(targets))
+	for _, target := range targets {
+		archiveName := ArchiveName(name, version, target)
+		if _, ok := seen[archiveName]; ok {
+			return fmt.Errorf("duplicate target output: %s", archiveName)
+		}
+		seen[archiveName] = struct{}{}
+	}
+	return nil
 }
 
 func BuildLdflags(version, versionVar string, noStrip bool, userLdflags string) string {

@@ -227,6 +227,49 @@ func TestArchiveName(t *testing.T) {
 	}
 }
 
+func TestValidateUniqueArchiveNamesRejectsExactDuplicate(t *testing.T) {
+	targets := []TargetSpec{
+		{GOOS: "linux", GOARCH: "amd64", Format: archive.FormatTarGz},
+		{GOOS: "linux", GOARCH: "amd64", Format: archive.FormatTarGz},
+	}
+
+	err := ValidateUniqueArchiveNames("myapp", "1.2.3", targets)
+	if err == nil {
+		t.Fatal("expected duplicate archive error")
+	}
+	if !strings.Contains(err.Error(), "duplicate target output: myapp-1.2.3-linux-amd64.tar.gz") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateUniqueArchiveNamesRejectsEquivalentDuplicate(t *testing.T) {
+	first, err := ParseTarget("linux/amd64")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := ParseTarget("linux/amd64:tar.gz")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = ValidateUniqueArchiveNames("myapp", "1.2.3", []TargetSpec{first, second})
+	if err == nil {
+		t.Fatal("expected duplicate archive error")
+	}
+}
+
+func TestValidateUniqueArchiveNamesAllowsDistinctTargets(t *testing.T) {
+	targets := []TargetSpec{
+		{GOOS: "linux", GOARCH: "amd64", Format: archive.FormatTarGz},
+		{GOOS: "linux", GOARCH: "arm64", Format: archive.FormatTarGz},
+		{GOOS: "windows", GOARCH: "amd64", Format: archive.FormatZip},
+	}
+
+	if err := ValidateUniqueArchiveNames("myapp", "1.2.3", targets); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestBuildLdflags(t *testing.T) {
 	if got := BuildLdflags("0.1.2", "", false, ""); got != "-s -w" {
 		t.Fatalf("got %q", got)
