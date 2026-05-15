@@ -144,36 +144,36 @@ func TestParseArgsLongFlags(t *testing.T) {
 }
 
 func TestParseArgsHelp(t *testing.T) {
-	oldStdout := os.Stdout
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
+	for _, args := range [][]string{{"-h"}, {"--help"}} {
+		output, err := captureStdout(func() error {
+			_, err := ParseArgs(args)
+			return err
+		})
+		if err == nil {
+			t.Fatal("help should return error")
+		}
+		if !errors.Is(err, ErrHelp) {
+			t.Fatalf("unexpected help error: %v", err)
+		}
+		assertHelpOutput(t, output)
 	}
-	os.Stdout = w
-	defer func() { os.Stdout = oldStdout }()
+}
 
-	done := make(chan string, 1)
-	go func() {
-		var buf bytes.Buffer
-		_, _ = io.Copy(&buf, r)
-		done <- buf.String()
-	}()
+func TestPrintUsage(t *testing.T) {
+	var buf bytes.Buffer
+	PrintUsage(&buf)
+	assertHelpOutput(t, buf.String())
+}
 
-	_, err = ParseArgs([]string{"-h"})
-	if err == nil {
-		t.Fatal("help should return error")
-	}
-	if !errors.Is(err, ErrHelp) {
-		t.Fatalf("unexpected help error: %v", err)
-	}
-
-	_ = w.Close()
-	output := <-done
-	if !strings.Contains(output, "Usage: go-build-bin -v VERSION [flags]") {
-		t.Fatalf("help output missing usage line: %q", output)
-	}
-	if !strings.Contains(output, "--version-var SYMBOL") || !strings.Contains(output, "--checksum-name NAME") {
-		t.Fatalf("help output missing flag lines: %q", output)
+func TestParseArgsVersionInfo(t *testing.T) {
+	for _, args := range [][]string{{"-V"}, {"--version-info"}} {
+		_, err := ParseArgs(args)
+		if err == nil {
+			t.Fatal("version-info should return error")
+		}
+		if !errors.Is(err, ErrVersion) {
+			t.Fatalf("unexpected version info error: %v", err)
+		}
 	}
 }
 
@@ -444,5 +444,74 @@ func TestArchiveContents(t *testing.T) {
 	}
 	if hdr.Name != "bin" {
 		t.Fatalf("bad tar contents: %s", hdr.Name)
+	}
+}
+
+func captureStdout(fn func() error) (string, error) {
+	oldStdout := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		return "", err
+	}
+	os.Stdout = w
+	defer func() { os.Stdout = oldStdout }()
+
+	done := make(chan string, 1)
+	go func() {
+		var buf bytes.Buffer
+		_, _ = io.Copy(&buf, r)
+		done <- buf.String()
+	}()
+
+	err = fn()
+	_ = w.Close()
+	return <-done, err
+}
+
+func assertHelpOutput(t *testing.T, output string) {
+	t.Helper()
+
+	for _, unwanted := range []string{
+		"NAME",
+		"SYNOPSIS",
+		"DESCRIPTION",
+		"EXAMPLES",
+	} {
+		if strings.Contains(output, unwanted) {
+			t.Fatalf("help output should not contain %q: %q", unwanted, output)
+		}
+	}
+
+	for _, want := range []string{
+		"Usage:",
+		"go-build-bin [options] -v <version>",
+		"Options:",
+		"-v, --version <version>",
+		"Default targets:",
+		"Output:",
+		"tmp/release/<version>",
+		"windows/amd64:zip",
+		"linux/amd64:tar.gz",
+		"<name>-<version>-<goos>-<goarch>.<format>",
+		"--target <target>",
+		"-h, --help",
+		"-V, --version-info",
+		"Default targets:",
+		"Output:",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("help output missing %q: %q", want, output)
+		}
+	}
+
+	verboseIdx := strings.Index(output, "--verbose")
+	helpIdx := strings.Index(output, "-h, --help")
+	versionInfoIdx := strings.Index(output, "-V, --version-info")
+	versionIdx := strings.Index(output, "-v, --version <version>")
+	if verboseIdx == -1 || versionIdx == -1 || helpIdx == -1 || versionInfoIdx == -1 {
+		t.Fatalf("missing option order markers: %q", output)
+	}
+	if !(versionIdx < verboseIdx && verboseIdx < helpIdx && helpIdx < versionInfoIdx) {
+		t.Fatalf("help/version order wrong: %q", output)
 	}
 }

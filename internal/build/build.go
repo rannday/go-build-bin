@@ -18,6 +18,7 @@ import (
 
 var (
 	ErrHelp        = errors.New("help requested")
+	ErrVersion     = errors.New("version requested")
 	versionPattern = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
 )
 
@@ -75,6 +76,7 @@ func ParseArgs(args []string) (Options, error) {
 	var opts Options
 	var targets targetList
 	var help bool
+	var versionInfo bool
 
 	fs := newFlagSet()
 	fs.StringVar(&opts.Version, "version", "", "release version")
@@ -100,6 +102,8 @@ func ParseArgs(args []string) (Options, error) {
 	fs.Var(&targets, "t", "GOOS/GOARCH[:FORMAT]")
 	fs.BoolVar(&help, "help", false, "print help")
 	fs.BoolVar(&help, "h", false, "print help")
+	fs.BoolVar(&versionInfo, "version-info", false, "output version information and exit")
+	fs.BoolVar(&versionInfo, "V", false, "output version information and exit")
 
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -110,6 +114,9 @@ func ParseArgs(args []string) (Options, error) {
 	if help {
 		fs.Usage()
 		return Options{}, ErrHelp
+	}
+	if versionInfo {
+		return Options{}, ErrVersion
 	}
 	if opts.Version == "" {
 		return Options{}, errors.New("missing required version")
@@ -140,27 +147,41 @@ func ParseArgs(args []string) (Options, error) {
 func newFlagSet() *flag.FlagSet {
 	fs := flag.NewFlagSet("go-build-bin", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
-	fs.Usage = func() {
-		fmt.Fprintln(os.Stdout, "Usage: go-build-bin -v VERSION [flags]")
-		fmt.Fprintln(os.Stdout)
-		fmt.Fprintln(os.Stdout, "Flags:")
-		fmt.Fprintln(os.Stdout, "  -v, --version VERSION")
-		fmt.Fprintln(os.Stdout, "  -n, --name NAME")
-		fmt.Fprintln(os.Stdout, "  -m, --main PACKAGE")
-		fmt.Fprintln(os.Stdout, "  --version-var SYMBOL")
-		fmt.Fprintln(os.Stdout, "  -o, --out DIR")
-		fmt.Fprintln(os.Stdout, "  -c, --clean")
-		fmt.Fprintln(os.Stdout, "  -f, --force")
-		fmt.Fprintln(os.Stdout, "  --flat")
-		fmt.Fprintln(os.Stdout, "  -t, --target GOOS/GOARCH[:FORMAT]")
-		fmt.Fprintln(os.Stdout, "  --ldflags VALUE")
-		fmt.Fprintln(os.Stdout, "  --no-strip")
-		fmt.Fprintln(os.Stdout, "  --go GO_BINARY")
-		fmt.Fprintln(os.Stdout, "  --checksum-name NAME")
-		fmt.Fprintln(os.Stdout, "  --verbose")
-		fmt.Fprintln(os.Stdout, "  -h, --help")
-	}
+	fs.Usage = func() { PrintUsage(os.Stdout) }
 	return fs
+}
+
+func PrintUsage(w io.Writer) {
+	fmt.Fprint(w, `Usage:
+  go-build-bin [options] -v <version>
+
+Options:
+  -v, --version <version>      release version (required)
+  -n, --name <name>            binary/release name (default: repo directory)
+  -m, --main <package>         main package (default: ./cmd/<name>, then repo root)
+      --version-var <symbol>   Go symbol set with -ldflags -X
+  -o, --out <dir>              output directory (default: tmp/release/<version>)
+  -c, --clean                  remove output directory before building
+  -f, --force                  overwrite existing artifacts
+      --flat                   write to tmp/release instead of tmp/release/<version>
+  -t, --target <target>        build target, repeatable: GOOS/GOARCH[:zip|tar.gz]
+      --ldflags <value>        additional linker flags
+      --no-strip               do not add -s -w linker flags
+      --go <path>              Go command to run (default: go)
+      --checksum-name <name>    checksum file name (default: checksums.txt)
+      --verbose                print build commands and Go output
+
+  -h, --help                   display this help and exit
+  -V, --version-info           output version information and exit
+
+Default targets:
+  windows/amd64:zip, linux/amd64:tar.gz, linux/arm64:tar.gz,
+  darwin/amd64:tar.gz, darwin/arm64:tar.gz
+
+Output:
+  archives: <name>-<version>-<goos>-<goarch>.<format>
+  checksum: checksums.txt
+`)
 }
 
 func Run(ctx context.Context, opts Options) (Result, error) {
