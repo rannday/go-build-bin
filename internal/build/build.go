@@ -18,7 +18,6 @@ import (
 
 var (
 	ErrHelp        = errors.New("help requested")
-	ErrVersion     = errors.New("version requested")
 	versionPattern = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
 )
 
@@ -28,7 +27,6 @@ type Options struct {
 	Main         string
 	VersionVar   string
 	OutDir       string
-	Flat         bool
 	Clean        bool
 	Force        bool
 	NoStrip      bool
@@ -76,7 +74,6 @@ func ParseArgs(args []string) (Options, error) {
 	var opts Options
 	var targets targetList
 	var help bool
-	var versionInfo bool
 
 	fs := newFlagSet()
 	fs.StringVar(&opts.Version, "version", "", "release version")
@@ -92,7 +89,6 @@ func ParseArgs(args []string) (Options, error) {
 	fs.BoolVar(&opts.Clean, "c", false, "remove output directory before building")
 	fs.BoolVar(&opts.Force, "force", false, "overwrite existing artifacts")
 	fs.BoolVar(&opts.Force, "f", false, "overwrite existing artifacts")
-	fs.BoolVar(&opts.Flat, "flat", false, "write artifacts directly in tmp/release")
 	fs.BoolVar(&opts.NoStrip, "no-strip", false, "disable -s -w")
 	fs.BoolVar(&opts.Verbose, "verbose", false, "print commands and Go output")
 	fs.StringVar(&opts.GoBinary, "go", "go", "go binary")
@@ -102,8 +98,6 @@ func ParseArgs(args []string) (Options, error) {
 	fs.Var(&targets, "t", "GOOS/GOARCH[:FORMAT]")
 	fs.BoolVar(&help, "help", false, "print help")
 	fs.BoolVar(&help, "h", false, "print help")
-	fs.BoolVar(&versionInfo, "version-info", false, "output version information and exit")
-	fs.BoolVar(&versionInfo, "V", false, "output version information and exit")
 
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -114,9 +108,6 @@ func ParseArgs(args []string) (Options, error) {
 	if help {
 		fs.Usage()
 		return Options{}, ErrHelp
-	}
-	if versionInfo {
-		return Options{}, ErrVersion
 	}
 	if opts.Version == "" {
 		return Options{}, errors.New("missing required version")
@@ -163,7 +154,6 @@ Options:
   -o, --out <dir>              output directory (default: tmp/release/<version>)
   -c, --clean                  remove output directory before building
   -f, --force                  overwrite existing artifacts
-      --flat                   write to tmp/release instead of tmp/release/<version>
   -t, --target <target>        build target, repeatable: GOOS/GOARCH[:zip|tar.gz]
       --ldflags <value>        additional linker flags
       --no-strip               do not add -s -w linker flags
@@ -172,7 +162,6 @@ Options:
       --verbose                print build commands and Go output
 
   -h, --help                   display this help and exit
-  -V, --version-info           output version information and exit
 
 Default targets:
   windows/amd64:zip, linux/amd64:tar.gz, linux/arm64:tar.gz,
@@ -213,7 +202,7 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 		}
 	}
 
-	outAbs, outDisplay, err := ResolveOutputDir(repoRoot, opts.Version, opts.Flat, opts.OutDir)
+	outAbs, outDisplay, err := ResolveOutputDir(repoRoot, opts.Version, opts.OutDir)
 	if err != nil {
 		return Result{}, err
 	}
@@ -388,7 +377,7 @@ func ResolveDefaultMain(repoRoot, name string) (string, error) {
 	return "", fmt.Errorf("default main package not found: ./cmd/%s does not exist and repo root has no runnable Go files; pass --main", name)
 }
 
-func ResolveOutputDir(repoRoot, version string, flat bool, out string) (string, string, error) {
+func ResolveOutputDir(repoRoot, version, out string) (string, string, error) {
 	if out != "" {
 		if filepath.IsAbs(out) {
 			return filepath.Clean(out), filepath.Clean(out), nil
@@ -397,10 +386,7 @@ func ResolveOutputDir(repoRoot, version string, flat bool, out string) (string, 
 		return filepath.Clean(filepath.Join(repoRoot, display)), display, nil
 	}
 
-	display := filepath.Join("tmp", "release")
-	if !flat {
-		display = filepath.Join(display, version)
-	}
+	display := filepath.Join("tmp", "release", version)
 	return filepath.Join(repoRoot, display), display, nil
 }
 

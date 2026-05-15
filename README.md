@@ -4,7 +4,6 @@
 
 It builds deterministic release archives, writes `checksums.txt`, and targets common Windows, Linux, and macOS binaries by default.
 It streams binaries straight into archives, so archive size does not depend on RAM.
-It also prints its own tool version with `-V, --version-info`.
 
 ## Install
 
@@ -35,18 +34,12 @@ go get -tool github.com/rannday/go-build-bin/cmd/go-build-bin@v1.2.3
 go-build-bin -v VERSION [flags]
 ```
 
-`-h, --help` prints help. `-V, --version-info` prints tool version.
+`-h, --help` prints help.
 
 Default output directory is version-scoped:
 
 ```text
 tmp/release/<version>
-```
-
-Use `--flat` to restore the old layout:
-
-```text
-tmp/release
 ```
 
 `--out DIR` uses exactly that directory.
@@ -84,12 +77,6 @@ Archive notes:
   - `darwin/arm64:tar.gz`
 - Default checksum filename: `checksums.txt`
 - Default Go binary: `go`
-
-Tool version:
-
-- `-V, --version-info` prints `go-build-bin <version>`
-- Default source is `cmd/go-build-bin/main.go`
-- Release builds can inject version with `-ldflags -X main.version=<tag>`
 
 ## Example
 

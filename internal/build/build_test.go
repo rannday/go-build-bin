@@ -70,7 +70,6 @@ func TestParseArgsShortFlags(t *testing.T) {
 		"-o", "dist",
 		"-c",
 		"-f",
-		"--flat",
 		"--no-strip",
 		"--verbose",
 		"--go", "custom-go",
@@ -88,7 +87,7 @@ func TestParseArgsShortFlags(t *testing.T) {
 	if opts.VersionVar != "github.com/rannday/myapp/internal/app.Version" {
 		t.Fatalf("version var = %q", opts.VersionVar)
 	}
-	if opts.OutDir != "dist" || !opts.Clean || !opts.Force || !opts.Flat || !opts.NoStrip || !opts.Verbose {
+	if opts.OutDir != "dist" || !opts.Clean || !opts.Force || !opts.NoStrip || !opts.Verbose {
 		t.Fatalf("unexpected output opts: %#v", opts)
 	}
 	if opts.GoBinary != "custom-go" || opts.ChecksumName != "sums.txt" || opts.Ldflags != "-buildid=abc" {
@@ -111,7 +110,6 @@ func TestParseArgsLongFlags(t *testing.T) {
 		"--out", "dist",
 		"--clean",
 		"--force",
-		"--flat",
 		"--no-strip",
 		"--verbose",
 		"--go", "custom-go",
@@ -129,7 +127,7 @@ func TestParseArgsLongFlags(t *testing.T) {
 	if opts.VersionVar != "github.com/rannday/myapp/internal/app.Version" {
 		t.Fatalf("version var = %q", opts.VersionVar)
 	}
-	if opts.OutDir != "dist" || !opts.Clean || !opts.Force || !opts.Flat || !opts.NoStrip || !opts.Verbose {
+	if opts.OutDir != "dist" || !opts.Clean || !opts.Force || !opts.NoStrip || !opts.Verbose {
 		t.Fatalf("unexpected output opts: %#v", opts)
 	}
 	if opts.GoBinary != "custom-go" || opts.ChecksumName != "sums.txt" || opts.Ldflags != "-buildid=abc" {
@@ -165,18 +163,6 @@ func TestPrintUsage(t *testing.T) {
 	assertHelpOutput(t, buf.String())
 }
 
-func TestParseArgsVersionInfo(t *testing.T) {
-	for _, args := range [][]string{{"-V"}, {"--version-info"}} {
-		_, err := ParseArgs(args)
-		if err == nil {
-			t.Fatal("version-info should return error")
-		}
-		if !errors.Is(err, ErrVersion) {
-			t.Fatalf("unexpected version info error: %v", err)
-		}
-	}
-}
-
 func TestDefaultTargets(t *testing.T) {
 	got := DefaultTargets()
 	if len(got) != 5 {
@@ -189,7 +175,7 @@ func TestDefaultTargets(t *testing.T) {
 
 func TestResolveOutputDir(t *testing.T) {
 	root := filepath.Join("C:", "repo")
-	abs, display, err := ResolveOutputDir(root, "0.1.2", false, "")
+	abs, display, err := ResolveOutputDir(root, "0.1.2", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -200,18 +186,7 @@ func TestResolveOutputDir(t *testing.T) {
 		t.Fatalf("display = %s", display)
 	}
 
-	abs, display, err = ResolveOutputDir(root, "0.1.2", true, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if display != filepath.Join("tmp", "release") {
-		t.Fatalf("display = %s", display)
-	}
-	if abs != filepath.Join(root, "tmp", "release") {
-		t.Fatalf("abs = %s", abs)
-	}
-
-	abs, display, err = ResolveOutputDir(root, "0.1.2", false, filepath.Join("dist", "out"))
+	abs, display, err = ResolveOutputDir(root, "0.1.2", filepath.Join("dist", "out"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -495,9 +470,6 @@ func assertHelpOutput(t *testing.T, output string) {
 		"<name>-<version>-<goos>-<goarch>.<format>",
 		"--target <target>",
 		"-h, --help",
-		"-V, --version-info",
-		"Default targets:",
-		"Output:",
 	} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("help output missing %q: %q", want, output)
@@ -506,12 +478,15 @@ func assertHelpOutput(t *testing.T, output string) {
 
 	verboseIdx := strings.Index(output, "--verbose")
 	helpIdx := strings.Index(output, "-h, --help")
-	versionInfoIdx := strings.Index(output, "-V, --version-info")
 	versionIdx := strings.Index(output, "-v, --version <version>")
-	if verboseIdx == -1 || versionIdx == -1 || helpIdx == -1 || versionInfoIdx == -1 {
+	if verboseIdx == -1 || versionIdx == -1 || helpIdx == -1 {
 		t.Fatalf("missing option order markers: %q", output)
 	}
-	if !(versionIdx < verboseIdx && verboseIdx < helpIdx && helpIdx < versionInfoIdx) {
-		t.Fatalf("help/version order wrong: %q", output)
+	if !(versionIdx < verboseIdx && verboseIdx < helpIdx) {
+		t.Fatalf("help order wrong: %q", output)
+	}
+
+	if strings.Contains(output, "-V, --version-info") {
+		t.Fatalf("help output should not contain version-info: %q", output)
 	}
 }
