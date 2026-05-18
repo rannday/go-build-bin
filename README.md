@@ -10,7 +10,7 @@ It streams binaries straight into archives, so archive size does not depend on R
 Pin it in a consumer repo with Go tools:
 
 ```bash
-go get -tool github.com/rannday/go-build-bin/cmd/go-build-bin@latest
+go get -tool github.com/rannday/go-build-bin@latest
 ```
 
 That adds tool to consumer repo `go.mod`.
@@ -25,7 +25,7 @@ go tool go-build-bin -v 1.2.3
 Pin specific version if you do not want latest:
 
 ```bash
-go get -tool github.com/rannday/go-build-bin/cmd/go-build-bin@v1.2.3
+go get -tool github.com/rannday/go-build-bin@v1.2.3
 ```
 
 ## Usage

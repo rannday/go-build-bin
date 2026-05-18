@@ -13,7 +13,7 @@ Repo purpose:
 Rules:
 
 - Keep module path and import paths on `github.com/rannday/go-build-bin`.
-- Keep `cmd/go-build-bin` as tool entrypoint.
+- Keep repo root as tool entrypoint.
 - Keep README examples generic. Do not hardcode old repo names.
 - Keep `AGENTS.md` as durable agent guidance. Do not move these rules into README.
 - Prefer narrow changes. Fix namespace, docs, defaults, and tests together when they drift.
