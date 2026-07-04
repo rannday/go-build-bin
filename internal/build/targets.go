@@ -48,6 +48,9 @@ func ParseTarget(raw string) (TargetSpec, error) {
 		return TargetSpec{}, fmt.Errorf("invalid target %q", raw)
 	}
 
+	goos = strings.ToLower(goos)
+	goarch = strings.ToLower(goarch)
+
 	target := TargetSpec{GOOS: goos, GOARCH: goarch, Format: defaultFormat(goos)}
 	if hasFormat {
 		switch archive.Format(strings.ToLower(format)) {
@@ -62,7 +65,7 @@ func ParseTarget(raw string) (TargetSpec, error) {
 }
 
 func defaultFormat(goos string) archive.Format {
-	if goos == "windows" {
+	if isWindows(goos) {
 		return archive.FormatZip
 	}
 	return archive.FormatTarGz
@@ -85,7 +88,7 @@ func ArchiveName(name, version string, target TargetSpec) string {
 }
 
 func BinaryName(name, goos string) string {
-	if goos == "windows" {
+	if isWindows(goos) {
 		return name + ".exe"
 	}
 	return name

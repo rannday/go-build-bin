@@ -8,7 +8,7 @@ import (
 func BuildLdflags(version, versionVar, extra string, strip bool) string {
 	var parts []string
 	if strip {
-		parts = append(parts, "-s", "-w")
+		parts = append(parts, "-s", "-w", "-buildid=")
 	}
 	if versionVar != "" {
 		parts = append(parts, "-X", fmt.Sprintf("%s=%s", versionVar, version))

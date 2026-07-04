@@ -23,7 +23,7 @@ func PrintUsage(w io.Writer) {
 	printHelpOption(w, "--ldflags <value>", "additional linker flags")
 	printHelpOption(w, "--no-strip", "do not add -s -w linker flags")
 	printHelpOption(w, "--go <path>", "Go command to run (default: go)")
-	printHelpOption(w, "--checksum-name <name>", "checksum file name (default: checksums.txt)")
+	printHelpOption(w, "--checksum-name <name>", "checksum file name (default: "+DefaultChecksumName+")")
 	printHelpOption(w, "--verbose", "print build commands and Go output")
 	fmt.Fprintln(w)
 	printHelpOption(w, "-h, --help", "display this help and exit")
@@ -34,7 +34,7 @@ func PrintUsage(w io.Writer) {
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Output:")
 	fmt.Fprintln(w, "  archives: <name>-<version>-<goos>-<goarch>.<format>")
-	fmt.Fprintln(w, "  checksum: checksums.txt")
+	fmt.Fprintf(w, "  checksum: %s\n", DefaultChecksumName)
 }
 
 func printHelpOption(w io.Writer, name, desc string) {

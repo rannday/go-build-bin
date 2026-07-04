@@ -79,7 +79,7 @@ func ParseArgsWithUsage(args []string, usageOut io.Writer) (Options, error) {
 	fs.Var(&targets, "t", "build target, repeatable: GOOS/GOARCH[:zip|tar.gz]")
 	fs.StringVar(&opts.Ldflags, "ldflags", "", "additional linker flags")
 	fs.StringVar(&opts.GoBinary, "go", "go", "Go command to run (default: go)")
-	fs.StringVar(&opts.ChecksumName, "checksum-name", "checksums.txt", "checksum file name (default: checksums.txt)")
+	fs.StringVar(&opts.ChecksumName, "checksum-name", DefaultChecksumName, "checksum file name (default: "+DefaultChecksumName+")")
 	fs.BoolVar(&help, "help", false, "display this help and exit")
 	fs.BoolVar(&help, "h", false, "display this help and exit")
 
@@ -88,7 +88,7 @@ func ParseArgsWithUsage(args []string, usageOut io.Writer) (Options, error) {
 			PrintUsage(usageOut)
 			return Options{}, ErrHelp
 		}
-		return Options{}, normalizeFlagError(err)
+		return Options{}, normalizeFlagError(err, longFlagNamesFrom(fs))
 	}
 
 	if help {
@@ -106,6 +106,10 @@ func ParseArgsWithUsage(args []string, usageOut io.Writer) (Options, error) {
 		opts.Targets = append([]TargetSpec(nil), targets...)
 	}
 
+	if err := validateTargetsIfGoAvailable(opts.Targets, opts.GoBinary); err != nil {
+		return Options{}, err
+	}
+
 	return opts, nil
 }
 
@@ -116,24 +120,23 @@ func newFlagSet(usageOut io.Writer) *flag.FlagSet {
 	return fs
 }
 
-var longFlagNames = []string{
-	"version",
-	"name",
-	"main",
-	"version-var",
-	"out",
-	"clean",
-	"force",
-	"target",
-	"ldflags",
-	"no-strip",
-	"go",
-	"checksum-name",
-	"verbose",
-	"help",
+func longFlagNamesFrom(fs *flag.FlagSet) []string {
+	var names []string
+	seen := make(map[string]struct{})
+	fs.VisitAll(func(f *flag.Flag) {
+		if len(f.Name) == 1 {
+			return
+		}
+		if _, ok := seen[f.Name]; ok {
+			return
+		}
+		seen[f.Name] = struct{}{}
+		names = append(names, f.Name)
+	})
+	return names
 }
 
-func normalizeFlagError(err error) error {
+func normalizeFlagError(err error, longFlagNames []string) error {
 	if err == nil {
 		return nil
 	}

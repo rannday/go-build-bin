@@ -47,6 +47,32 @@ func TestParseTarget(t *testing.T) {
 	if target.String() != "windows/amd64:zip" {
 		t.Fatalf("target = %#v", target)
 	}
+
+	target, err = ParseTarget("Linux/AMD64")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if target.GOOS != "linux" || target.GOARCH != "amd64" {
+		t.Fatalf("target = %#v", target)
+	}
+}
+
+func TestParseTargetInvalid(t *testing.T) {
+	invalid := []string{"", "linux", "linux/", "/amd64", "linux/amd64:rar", "linux/amd64:"}
+	for _, raw := range invalid {
+		if _, err := ParseTarget(raw); err == nil {
+			t.Fatalf("ParseTarget(%q) expected error", raw)
+		}
+	}
+}
+
+func TestValidateTargetPlatform(t *testing.T) {
+	if err := ValidateTargetPlatform(TargetSpec{GOOS: "linux", GOARCH: "amd64"}, "go"); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateTargetPlatform(TargetSpec{GOOS: "linx", GOARCH: "amd64"}, "go"); err == nil {
+		t.Fatal("expected unsupported platform error")
+	}
 }
 
 func TestArchiveName(t *testing.T) {

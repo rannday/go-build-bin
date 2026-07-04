@@ -6,21 +6,21 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/rannday/go-build-bin/internal/archive"
 	"github.com/rannday/go-build-bin/internal/checksum"
 )
 
 type Result struct {
-	RepoRoot      string
-	Name          string
-	Version       string
-	MainPackage   string
-	OutputDir     string
-	ArtifactDir   string
-	Archives      []string
-	ChecksumPath  string
-	ChecksumsPath string
+	RepoRoot     string
+	Name         string
+	Version      string
+	MainPackage  string
+	OutputDir    string
+	OutputDirRel string
+	Archives     []string
+	ChecksumPath string
 }
 
 func Run(opts Options) (Result, error) {
@@ -37,7 +37,7 @@ func Run(opts Options) (Result, error) {
 		opts.GoBinary = "go"
 	}
 	if opts.ChecksumName == "" {
-		opts.ChecksumName = "checksums.txt"
+		opts.ChecksumName = DefaultChecksumName
 	}
 
 	name := opts.Name
@@ -53,7 +53,7 @@ func Run(opts Options) (Result, error) {
 		}
 	}
 
-	outAbs, _, err := ResolveOutputDir(repoRoot, opts.Version, opts.OutDir)
+	outAbs, outRel, err := ResolveOutputDir(repoRoot, opts.Version, opts.OutDir)
 	if err != nil {
 		return Result{}, err
 	}
@@ -61,6 +61,10 @@ func Run(opts Options) (Result, error) {
 	targets := opts.Targets
 	if len(targets) == 0 {
 		targets = DefaultTargets()
+	}
+
+	if err := validateTargets(targets, opts.GoBinary); err != nil {
+		return Result{}, err
 	}
 
 	if err := ValidateUniqueArchiveNames(name, opts.Version, targets); err != nil {
@@ -87,68 +91,121 @@ func Run(opts Options) (Result, error) {
 		}
 	}
 
-	archives := make([]string, 0, len(targets))
-	checksumEntries := make([]checksum.Entry, 0, len(targets))
-
-	for _, target := range targets {
-		archivePath := filepath.Join(outAbs, ArchiveName(name, opts.Version, target))
-		buildDir, err := os.MkdirTemp(outAbs, ".build-*")
-		if err != nil {
-			return Result{}, err
-		}
-
-		err = func() error {
-			defer os.RemoveAll(buildDir)
-
-			binaryPath := filepath.Join(buildDir, BinaryName(name, target.GOOS))
-			if err := buildTarget(repoRoot, mainPkg, opts, target, binaryPath); err != nil {
-				return err
-			}
-
-			if err := archive.WriteAtomic(archivePath, target.Format, []archive.Item{
-				{Name: BinaryName(name, target.GOOS), Path: binaryPath},
-			}); err != nil {
-				return err
-			}
-
-			sum, err := checksum.SumFile(archivePath)
-			if err != nil {
-				return err
-			}
-
-			archives = append(archives, archivePath)
-			checksumEntries = append(checksumEntries, checksum.Entry{
-				Name: filepath.Base(archivePath),
-				Sum:  sum,
-			})
-			return nil
-		}()
-		if err != nil {
-			return Result{}, err
-		}
-	}
-
-	checksumPath, err := checksum.WriteAtomic(outAbs, opts.ChecksumName, checksumEntries)
+	archives, checksumEntries, err := buildTargets(repoRoot, outAbs, name, mainPkg, opts, targets)
 	if err != nil {
 		return Result{}, err
 	}
 
+	checksumPath, err := checksum.WriteAtomic(outAbs, opts.ChecksumName, checksumEntries)
+	if err != nil {
+		removePaths(archives)
+		return Result{}, err
+	}
+
 	return Result{
-		RepoRoot:      repoRoot,
-		Name:          name,
-		Version:       opts.Version,
-		MainPackage:   mainPkg,
-		OutputDir:     outAbs,
-		ArtifactDir:   outAbs,
-		Archives:      archives,
-		ChecksumPath:  checksumPath,
-		ChecksumsPath: checksumPath,
+		RepoRoot:     repoRoot,
+		Name:         name,
+		Version:      opts.Version,
+		MainPackage:  mainPkg,
+		OutputDir:    outAbs,
+		OutputDirRel: outRel,
+		Archives:     archives,
+		ChecksumPath: checksumPath,
+	}, nil
+}
+
+func validateTargets(targets []TargetSpec, goBinary string) error {
+	for _, target := range targets {
+		if err := ValidateTargetPlatform(target, goBinary); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+type targetBuildResult struct {
+	archivePath string
+	entry       checksum.Entry
+}
+
+func buildTargets(repoRoot, outAbs, name, mainPkg string, opts Options, targets []TargetSpec) ([]string, []checksum.Entry, error) {
+	results := make([]targetBuildResult, len(targets))
+	errs := make([]error, len(targets))
+
+	var wg sync.WaitGroup
+	for i, target := range targets {
+		wg.Add(1)
+		go func(i int, target TargetSpec) {
+			defer wg.Done()
+			results[i], errs[i] = buildOneTarget(repoRoot, outAbs, name, mainPkg, opts, target)
+		}(i, target)
+	}
+	wg.Wait()
+
+	var firstErr error
+	created := make([]string, 0, len(targets))
+	for i := range targets {
+		if errs[i] != nil {
+			if firstErr == nil {
+				firstErr = errs[i]
+			}
+			continue
+		}
+		created = append(created, results[i].archivePath)
+	}
+
+	if firstErr != nil {
+		removePaths(created)
+		return nil, nil, firstErr
+	}
+
+	archives := make([]string, 0, len(targets))
+	checksumEntries := make([]checksum.Entry, 0, len(targets))
+	for i := range targets {
+		archives = append(archives, results[i].archivePath)
+		checksumEntries = append(checksumEntries, results[i].entry)
+	}
+
+	return archives, checksumEntries, nil
+}
+
+func buildOneTarget(repoRoot, outAbs, name, mainPkg string, opts Options, target TargetSpec) (targetBuildResult, error) {
+	archivePath := filepath.Join(outAbs, ArchiveName(name, opts.Version, target))
+	buildDir, err := os.MkdirTemp(outAbs, ".build-*")
+	if err != nil {
+		return targetBuildResult{}, err
+	}
+	defer os.RemoveAll(buildDir)
+
+	binaryPath := filepath.Join(buildDir, BinaryName(name, target.GOOS))
+	if err := buildTarget(repoRoot, mainPkg, opts, target, binaryPath); err != nil {
+		return targetBuildResult{}, err
+	}
+
+	if err := archive.WriteAtomic(archivePath, target.Format, []archive.Item{
+		{Name: BinaryName(name, target.GOOS), Path: binaryPath},
+	}); err != nil {
+		return targetBuildResult{}, err
+	}
+
+	sum, err := checksum.SumFile(archivePath)
+	if err != nil {
+		removePaths([]string{archivePath})
+		return targetBuildResult{}, err
+	}
+
+	return targetBuildResult{
+		archivePath: archivePath,
+		entry: checksum.Entry{
+			Name: filepath.Base(archivePath),
+			Sum:  sum,
+		},
 	}, nil
 }
 
 func buildTarget(repoRoot, mainPkg string, opts Options, target TargetSpec, binaryPath string) error {
 	ldflags := BuildLdflags(opts.Version, opts.VersionVar, opts.Ldflags, !opts.NoStrip)
-	args := []string{"build", "-trimpath", "-o", binaryPath}
+	args := []string{"build", "-trimpath", "-buildvcs=false", "-o", binaryPath}
 	if ldflags != "" {
 		args = append(args, "-ldflags", ldflags)
 	}
@@ -185,5 +242,29 @@ func dirIsEmpty(dir string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return len(entries) == 0, nil
+	for _, entry := range entries {
+		if isIgnorableBuildArtifact(entry.Name()) {
+			continue
+		}
+		return false, nil
+	}
+	return true, nil
+}
+
+func isIgnorableBuildArtifact(name string) bool {
+	return strings.HasPrefix(name, ".build-") || strings.Contains(name, ".tmp-")
+}
+
+func removePaths(paths []string) {
+	seen := make(map[string]struct{}, len(paths))
+	for _, path := range paths {
+		if path == "" {
+			continue
+		}
+		if _, ok := seen[path]; ok {
+			continue
+		}
+		seen[path] = struct{}{}
+		_ = os.Remove(path)
+	}
 }

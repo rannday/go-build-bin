@@ -19,6 +19,9 @@ func TestResolveOutputDir(t *testing.T) {
 	if display != filepath.Join("tmp", "release", "0.1.2") {
 		t.Fatalf("display = %q", display)
 	}
+	if filepath.IsAbs(display) {
+		t.Fatalf("expected relative display path, got %q", display)
+	}
 
 	abs, display, err = ResolveOutputDir(root, "0.1.2", filepath.Join("dist", "out"))
 	if err != nil {
@@ -48,5 +51,26 @@ func TestResolveDefaultMainPrefersCmdDir(t *testing.T) {
 	}
 	if mainPkg != "./cmd/myapp" {
 		t.Fatalf("mainPkg = %q", mainPkg)
+	}
+}
+
+func TestFindRepoRootMissingGoMod(t *testing.T) {
+	root, err := os.MkdirTemp("/tmp", "go-build-bin-nomod-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(root)
+
+	oldwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(oldwd)
+
+	if _, err := FindRepoRoot(); err == nil {
+		t.Fatal("expected error when go.mod is missing")
 	}
 }

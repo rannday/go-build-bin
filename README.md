@@ -3,7 +3,7 @@
 `go-build-bin` is a reusable Go build tool for Go projects.
 
 It builds deterministic release archives, writes `checksums.txt`, and targets common Windows, Linux, and macOS binaries by default.
-It streams binaries straight into archives, so archive size does not depend on RAM.
+Binaries are built to a temp file per target, then streamed into archives with bounded memory via `io.Copy`.
 
 ## Install
 
@@ -56,9 +56,11 @@ Default package detection:
 
 Generated `-ldflags` order:
 
-1. `-s -w` unless `--no-strip`
+1. `-s -w -buildid=` unless `--no-strip`
 2. `-X <version-var>=<version>` when `--version-var` is set
 3. user `--ldflags` value, appended last
+
+Release builds also pass `-trimpath` and `-buildvcs=false` for reproducible binaries.
 
 Archive filenames:
 

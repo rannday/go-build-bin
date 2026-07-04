@@ -4,12 +4,11 @@ import (
 	"archive/tar"
 	"archive/zip"
 	"compress/gzip"
-	"crypto/sha256"
-	"encoding/hex"
-	"io"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/rannday/go-build-bin/internal/checksum"
 )
 
 func TestWriteAtomicZipDeterministic(t *testing.T) {
@@ -30,11 +29,11 @@ func TestWriteAtomicZipDeterministic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sum1, err := fileSum(out1)
+	sum1, err := checksum.SumFile(out1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	sum2, err := fileSum(out2)
+	sum2, err := checksum.SumFile(out2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,11 +69,11 @@ func TestWriteAtomicTarGzDeterministic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sum1, err := fileSum(out1)
+	sum1, err := checksum.SumFile(out1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	sum2, err := fileSum(out2)
+	sum2, err := checksum.SumFile(out2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,18 +99,4 @@ func TestWriteAtomicTarGzDeterministic(t *testing.T) {
 	if hdr.Name != "myapp" {
 		t.Fatalf("tar entry = %q", hdr.Name)
 	}
-}
-
-func fileSum(path string) (string, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return "", err
-	}
-	defer file.Close()
-
-	hash := sha256.New()
-	if _, err := io.Copy(hash, file); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(hash.Sum(nil)), nil
 }

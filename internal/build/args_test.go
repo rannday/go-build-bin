@@ -3,74 +3,78 @@ package build
 import (
 	"bytes"
 	"errors"
+	"strings"
 	"testing"
 )
 
-func TestParseArgsShortFlags(t *testing.T) {
-	var help bytes.Buffer
-	opts, err := ParseArgsWithUsage([]string{
-		"-v", "1.2.3",
-		"-n", "myapp",
-		"-m", "./cmd/myapp",
-		"-o", "dist",
-		"-c",
-		"-f",
-		"--no-strip",
-		"--verbose",
-		"--go", "custom-go",
-		"--checksum-name", "sums.txt",
-		"--ldflags", "-buildid=abc",
-		"-t", "linux/arm64",
-	}, &help)
-	if err != nil {
-		t.Fatal(err)
+func TestParseArgsFlags(t *testing.T) {
+	tests := []struct {
+		name    string
+		args    []string
+		wantOS  string
+		wantArc string
+	}{
+		{
+			name: "short",
+			args: []string{
+				"-v", "1.2.3",
+				"-n", "myapp",
+				"-m", "./cmd/myapp",
+				"-o", "dist",
+				"-c",
+				"-f",
+				"--no-strip",
+				"--verbose",
+				"--go", "custom-go",
+				"--checksum-name", "sums.txt",
+				"--ldflags", "-buildid=abc",
+				"-t", "linux/arm64",
+			},
+			wantOS:  "linux",
+			wantArc: "arm64",
+		},
+		{
+			name: "long",
+			args: []string{
+				"--version", "1.2.3",
+				"--name", "myapp",
+				"--main", "./cmd/myapp",
+				"--out", "dist",
+				"--clean",
+				"--force",
+				"--no-strip",
+				"--verbose",
+				"--go", "custom-go",
+				"--checksum-name", "sums.txt",
+				"--ldflags", "-buildid=abc",
+				"--target", "darwin/arm64",
+			},
+			wantOS:  "darwin",
+			wantArc: "arm64",
+		},
 	}
 
-	if opts.Version != "1.2.3" || opts.Name != "myapp" || opts.MainPackage != "./cmd/myapp" {
-		t.Fatalf("unexpected opts: %#v", opts)
-	}
-	if opts.OutDir != "dist" || !opts.Clean || !opts.Force || !opts.NoStrip || !opts.Verbose {
-		t.Fatalf("unexpected output opts: %#v", opts)
-	}
-	if opts.GoBinary != "custom-go" || opts.ChecksumName != "sums.txt" || opts.Ldflags != "-buildid=abc" {
-		t.Fatalf("unexpected build opts: %#v", opts)
-	}
-	if len(opts.Targets) != 1 || opts.Targets[0].GOOS != "linux" || opts.Targets[0].GOARCH != "arm64" {
-		t.Fatalf("targets = %#v", opts.Targets)
-	}
-}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var help bytes.Buffer
+			opts, err := ParseArgsWithUsage(tt.args, &help)
+			if err != nil {
+				t.Fatal(err)
+			}
 
-func TestParseArgsLongFlags(t *testing.T) {
-	var help bytes.Buffer
-	opts, err := ParseArgsWithUsage([]string{
-		"--version", "1.2.3",
-		"--name", "myapp",
-		"--main", "./cmd/myapp",
-		"--out", "dist",
-		"--clean",
-		"--force",
-		"--no-strip",
-		"--verbose",
-		"--go", "custom-go",
-		"--checksum-name", "sums.txt",
-		"--ldflags", "-buildid=abc",
-		"--target", "darwin/arm64",
-	}, &help)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if opts.Version != "1.2.3" || opts.Name != "myapp" || opts.MainPackage != "./cmd/myapp" {
-		t.Fatalf("unexpected opts: %#v", opts)
-	}
-	if opts.OutDir != "dist" || !opts.Clean || !opts.Force || !opts.NoStrip || !opts.Verbose {
-		t.Fatalf("unexpected output opts: %#v", opts)
-	}
-	if opts.GoBinary != "custom-go" || opts.ChecksumName != "sums.txt" || opts.Ldflags != "-buildid=abc" {
-		t.Fatalf("unexpected build opts: %#v", opts)
-	}
-	if len(opts.Targets) != 1 || opts.Targets[0].GOOS != "darwin" || opts.Targets[0].GOARCH != "arm64" {
-		t.Fatalf("targets = %#v", opts.Targets)
+			if opts.Version != "1.2.3" || opts.Name != "myapp" || opts.MainPackage != "./cmd/myapp" {
+				t.Fatalf("unexpected opts: %#v", opts)
+			}
+			if opts.OutDir != "dist" || !opts.Clean || !opts.Force || !opts.NoStrip || !opts.Verbose {
+				t.Fatalf("unexpected output opts: %#v", opts)
+			}
+			if opts.GoBinary != "custom-go" || opts.ChecksumName != "sums.txt" || opts.Ldflags != "-buildid=abc" {
+				t.Fatalf("unexpected build opts: %#v", opts)
+			}
+			if len(opts.Targets) != 1 || opts.Targets[0].GOOS != tt.wantOS || opts.Targets[0].GOARCH != tt.wantArc {
+				t.Fatalf("targets = %#v", opts.Targets)
+			}
+		})
 	}
 }
 
@@ -147,5 +151,31 @@ func TestParseArgsRequiresVersion(t *testing.T) {
 	_, err := ParseArgsWithUsage([]string{"--name", "myapp"}, &help)
 	if err == nil {
 		t.Fatal("expected error")
+	}
+}
+
+func TestParseArgsDefersTargetValidationForMissingGoBinary(t *testing.T) {
+	var help bytes.Buffer
+	opts, err := ParseArgsWithUsage([]string{
+		"-v", "1.0.0",
+		"--go", "custom-go",
+		"-t", "linux/arm64",
+	}, &help)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if opts.GoBinary != "custom-go" {
+		t.Fatalf("GoBinary = %q", opts.GoBinary)
+	}
+}
+
+func TestParseArgsRejectsUnsupportedTarget(t *testing.T) {
+	var help bytes.Buffer
+	_, err := ParseArgsWithUsage([]string{"-v", "1.0.0", "-t", "linx/amd64"}, &help)
+	if err == nil {
+		t.Fatal("expected unsupported target error")
+	}
+	if !strings.Contains(err.Error(), "unsupported target platform") {
+		t.Fatalf("error = %q", err.Error())
 	}
 }
