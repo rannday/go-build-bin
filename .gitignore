@@ -1,1 +1,12 @@
-tmp/
+# Editor and OS files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Go build/test artifacts
+/bin/
+/dist/
+*.test
+*.out
+coverage.*
