@@ -57,7 +57,7 @@ func TestRunBuildsArchivesAndChecksum(t *testing.T) {
 	if res.ChecksumPath == "" {
 		t.Fatal("missing checksum path")
 	}
-	if res.OutputDirRel != filepath.Join("tmp", "release", "1.2.3") {
+	if res.OutputDirRel != filepath.Join("dist", "1.2.3") {
 		t.Fatalf("OutputDirRel = %q", res.OutputDirRel)
 	}
 	if len(res.Archives) != len(DefaultTargets()) {
@@ -140,6 +140,31 @@ func TestRunCleanAllowsRebuild(t *testing.T) {
 	opts.Clean = true
 	if _, err := Run(opts); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestRunHonorsExplicitOutputDirExactly(t *testing.T) {
+	root := setupTestModule(t)
+
+	opts := Options{
+		Version: "1.2.3",
+		Name:    "myapp",
+		OutDir:  "custom-out",
+		Targets: []TargetSpec{linuxAMD64Target()},
+	}
+	res, err := Run(opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if res.OutputDirRel != "custom-out" {
+		t.Fatalf("OutputDirRel = %q", res.OutputDirRel)
+	}
+	if res.OutputDir != filepath.Join(root, "custom-out") {
+		t.Fatalf("OutputDir = %q", res.OutputDir)
+	}
+	if strings.Contains(res.OutputDir, "1.2.3") {
+		t.Fatalf("OutputDir should not include version: %q", res.OutputDir)
 	}
 }
 

@@ -39,7 +39,7 @@ go-build-bin -v VERSION [flags]
 Default output directory is version-scoped:
 
 ```text
-tmp/release/<version>
+dist/<version>
 ```
 
 `--out DIR` uses exactly that directory.
@@ -89,7 +89,7 @@ go tool go-build-bin -v 1.2.3 --name myapp --main ./cmd/myapp --version-var gith
 Expected output directory:
 
 ```text
-tmp/release/1.2.3
+dist/1.2.3
 ```
 
 ## Release Workflow
@@ -101,4 +101,4 @@ go test ./...
 go tool go-build-bin -v 1.2.3 --name myapp --main ./cmd/myapp --version-var github.com/rannday/myapp/internal/app.Version
 ```
 
-Use the archives and `checksums.txt` under `tmp/release/<version>` with your own release uploader.
+Use the archives and `checksums.txt` under `dist/<version>` with your own release uploader.

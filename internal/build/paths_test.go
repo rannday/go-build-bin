@@ -13,10 +13,10 @@ func TestResolveOutputDir(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if abs != filepath.Join(root, "tmp", "release", "0.1.2") {
+	if abs != filepath.Join(root, "dist", "0.1.2") {
 		t.Fatalf("abs = %q", abs)
 	}
-	if display != filepath.Join("tmp", "release", "0.1.2") {
+	if display != filepath.Join("dist", "0.1.2") {
 		t.Fatalf("display = %q", display)
 	}
 	if filepath.IsAbs(display) {
@@ -29,6 +29,21 @@ func TestResolveOutputDir(t *testing.T) {
 	}
 	if abs != filepath.Join(root, "dist", "out") || display != filepath.Join("dist", "out") {
 		t.Fatalf("explicit out wrong: %s %s", abs, display)
+	}
+}
+
+func TestResolveOutputDirExplicitOutDoesNotAppendVersion(t *testing.T) {
+	root := filepath.Join("C:", "repo")
+
+	abs, display, err := ResolveOutputDir(root, "0.1.2", "release-out")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if abs != filepath.Join(root, "release-out") {
+		t.Fatalf("abs = %q", abs)
+	}
+	if display != "release-out" {
+		t.Fatalf("display = %q", display)
 	}
 }
 

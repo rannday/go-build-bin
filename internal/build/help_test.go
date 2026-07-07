@@ -24,7 +24,7 @@ func assertHelpOutput(t *testing.T, got string) {
 		"-h, --help",
 		"Default targets:",
 		"Output:",
-		"tmp/release/<version>",
+		"dist/<version>",
 		"<name>-<version>-<goos>-<goarch>.<format>",
 	}
 	for _, want := range mustContain {

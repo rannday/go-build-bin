@@ -16,7 +16,7 @@ func PrintUsage(w io.Writer) {
 	printHelpOption(w, "-n, --name <name>", "binary/release name (default: repo directory)")
 	printHelpOption(w, "-m, --main <package>", "main package (default: ./cmd/<name>, then repo root)")
 	printHelpOption(w, "--version-var <symbol>", "Go symbol set with -ldflags -X")
-	printHelpOption(w, "-o, --out <dir>", "output directory (default: tmp/release/<version>)")
+	printHelpOption(w, "-o, --out <dir>", "output directory (default: dist/<version>)")
 	printHelpOption(w, "-c, --clean", "remove output directory before building")
 	printHelpOption(w, "-f, --force", "overwrite existing artifacts")
 	printHelpOption(w, "-t, --target <target>", "build target, repeatable: GOOS/GOARCH[:zip|tar.gz]")

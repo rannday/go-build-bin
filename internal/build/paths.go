@@ -59,7 +59,7 @@ func ResolveOutputDir(repoRoot, version, out string) (string, string, error) {
 		return filepath.Clean(filepath.Join(repoRoot, display)), display, nil
 	}
 
-	display := filepath.Join("tmp", "release", version)
+	display := filepath.Join("dist", version)
 	return filepath.Join(repoRoot, display), display, nil
 }
 
