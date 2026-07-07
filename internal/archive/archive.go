@@ -29,6 +29,8 @@ type Item struct {
 	Path string
 }
 
+var fixedArchiveTime = time.Unix(0, 0).UTC()
+
 func WriteAtomic(path string, format Format, items []Item) error {
 	return atomicfile.Write(path, func(tmpPath string) error {
 		switch format {
@@ -73,7 +75,7 @@ func writeZipItem(zw *zip.Writer, item Item) error {
 	}
 	hdr.Name = archiveName(item)
 	hdr.Method = zip.Deflate
-	hdr.SetModTime(time.Unix(0, 0).UTC())
+	hdr.Modified = fixedArchiveTime
 
 	w, err := zw.CreateHeader(hdr)
 	if err != nil {
@@ -121,7 +123,7 @@ func writeTarItem(tw *tar.Writer, item Item) error {
 		return err
 	}
 	hdr.Name = archiveName(item)
-	hdr.ModTime = time.Unix(0, 0).UTC()
+	hdr.ModTime = fixedArchiveTime
 	hdr.AccessTime = hdr.ModTime
 	hdr.ChangeTime = hdr.ModTime
 	hdr.Uid = 0

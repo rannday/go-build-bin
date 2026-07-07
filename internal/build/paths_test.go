@@ -55,11 +55,7 @@ func TestResolveDefaultMainPrefersCmdDir(t *testing.T) {
 }
 
 func TestFindRepoRootMissingGoMod(t *testing.T) {
-	root, err := os.MkdirTemp("/tmp", "go-build-bin-nomod-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(root)
+	root := t.TempDir()
 
 	oldwd, err := os.Getwd()
 	if err != nil {
